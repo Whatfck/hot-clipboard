@@ -253,17 +253,17 @@ Cuando `hp` inspecciona el portapapeles, evalúa los tipos en el siguiente orden
 * **Estructura del Crate:**
 
     ```
-  hot-clipboard/
-  ├── Cargo.toml
-  ├── SPEC.md
-  └── src/
-      ├── lib.rs mar          ## Lógica compartida: NSPasteboard wrapper mar            
-      ├── pasteboard.rs       ## Integración nativa con macOS Cocoa / AppKit
-      ├── image_ops.rs        ## Conversión y guardado de formatos de imagen
-      └── bin/
-          ├── hc.rs           ## Punto de entrada para el comando 'hc'
-          └── hp.rs           ## Punto de entrada para el comando 'hp'
-  ```
+    hot-clipboard/
+    ├── Cargo.toml
+    ├── SPEC.md
+    └── src/
+        ├── lib.rs              ## Lógica compartida: NSPasteboard wrapper            
+        ├── pasteboard.rs       ## Integración nativa con macOS Cocoa / AppKit
+        ├── image_ops.rs        ## Conversión y guardado de formatos de imagen
+        └── bin/
+            ├── hc.rs           ## Punto de entrada para el comando 'hc'
+            └── hp.rs           ## Punto de entrada para el comando 'hp'
+    ```
 
 * **Dependencias Principales:**
   * `objc2`, `objc2-app-kit`, `objc2-foundation`: FFI segura y moderna con las APIs de macOS.
