@@ -223,31 +223,9 @@ Cuando `hp` inspecciona el portapapeles, evalúa los tipos en el siguiente orden
 └──────────────────────────┬─────────────────────────────┘
                            │ No
 ┌──────────────────────────▼─────────────────────────────┐
-│ 4. Desconocido / Vacío                                 │
+│ 4. Desconocido / Vacío                                 |
 |    -> Mensaje informativo                              │
 └────────────────────────────────────────────────────────┘
-```
-```mermaid
----
-config:
----
-
-flowchart TD
-A -->|no| B
-B -->|no| C
-C -->|no| D
-
-A(1. ¿Contiene URLs de archivos? public.file-url
--> Tratar como archivos de Finder)
-
-B(2. ¿Contiene datos de imagen? public.png, tiff, etc
--> Tratar como imagen/captura de pantalla)
-
-C(3. ¿Contiene texto plano? public.utf8-plain-text
--> Tratar como texto plano / stdout)
-
-D(4. Desconocido / Vacío
--> Mensaje informativo)
 ```
 ---
 
@@ -274,28 +252,18 @@ D(4. Desconocido / Vacío
 
 * **Estructura del Crate:**
 
-```mermaid
----
-config:
-  treeView:
-    showIcons: true
-    defaultIconPack: material-icon-theme
-    extensionIcons:
-        .rs: rust
-        .md: markdown
-        .toml: toml
----
-treeView-beta
-    Cargo.toml
-    SPEC.md
-    src/
-        lib.rs ## Lógica compartida: NSPasteboard wrapper mar 
-        pasteboard.rs ## Integración nativa con macOS Cocoa / AppKit
-        image_ops.rs ## Conversión y guardado de formatos de imagen
-        bin/
-            hc.rs ## Punto de entrada para el comando 'hc'
-            hp.rs ## Punto de entrada para el comando 'hp'
-```
+    ```
+  hot-clipboard/
+  ├── Cargo.toml
+  ├── SPEC.md
+  └── src/
+      ├── lib.rs mar          ## Lógica compartida: NSPasteboard wrapper mar            
+      ├── pasteboard.rs       ## Integración nativa con macOS Cocoa / AppKit
+      ├── image_ops.rs        ## Conversión y guardado de formatos de imagen
+      └── bin/
+          ├── hc.rs           ## Punto de entrada para el comando 'hc'
+          └── hp.rs           ## Punto de entrada para el comando 'hp'
+  ```
 
 * **Dependencias Principales:**
   * `objc2`, `objc2-app-kit`, `objc2-foundation`: FFI segura y moderna con las APIs de macOS.
