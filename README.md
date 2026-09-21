@@ -154,6 +154,5 @@ Tests interact with the macOS clipboard, so:
 
 ---
 
-## License
-
-MIT
+## Author
+@Whatfck
