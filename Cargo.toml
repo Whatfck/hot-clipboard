@@ -1,0 +1,27 @@
+[package]
+name = "hot-clipboard"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "hc"
+path = "src/bin/hc.rs"
+
+[[bin]]
+name = "hp"
+path = "src/bin/hp.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+objc2 = "0.5"
+objc2-foundation = { version = "0.2", features = ["NSString", "NSArray", "NSData", "NSURL"] }
+objc2-app-kit = { version = "0.2", features = ["NSPasteboard"] }
+image = { version = "0.25.10", features = ["tiff"] }
+chrono = { version = "0.4", features = ["clock"] }
+
+[lib]
+name = "hot_clipboard"
+path = "src/lib.rs"
+
+[dev-dependencies]
+tempfile = "3.14"
