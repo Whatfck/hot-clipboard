@@ -126,11 +126,21 @@ hp > output.txt
 
 ---
 
-## Installation (build from source)
+## Installation
+
+### Homebrew (Recommended)
+
+```bash
+brew tap Whatfck/hot-clipboard https://github.com/Whatfck/hot-clipboard.git
+brew install --HEAD hot-clipboard
+```
+
+### Build from source (Cargo)
 
 macOS required (clipboard is macOS `NSPasteboard`).
 
 ```bash
+git clone https://github.com/Whatfck/hot-clipboard.git
 cd hot-clipboard
 cargo build --release
 ```
