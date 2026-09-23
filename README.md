@@ -128,10 +128,18 @@ hp > output.txt
 
 ## Installation
 
-### Homebrew (Recommended)
+### Homebrew (via custom Tap)
+
+To install `hot-clipboard`:
 
 ```bash
 brew tap Whatfck/hot-clipboard https://github.com/Whatfck/hot-clipboard.git
+brew install hot-clipboard
+```
+
+This adds the `Whatfck/hot-clipboard` Tap. **Once approved in Homebrew Core**, you can install via:
+
+```bash
 brew install hot-clipboard
 ```
 
