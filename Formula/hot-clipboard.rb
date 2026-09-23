@@ -2,7 +2,7 @@ class HotClipboard < Formula
   desc "Ergonomic macOS clipboard CLI bridging terminal and NSPasteboard"
   homepage "https://github.com/Whatfck/hot-clipboard"
   url "https://github.com/Whatfck/hot-clipboard/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "REPLACE_WITH_ACTUAL_SHA256_ONCE_TAGGED"
+  sha256 "419cb83add375793e4f30cb360e73148eb0e962aeb5e675d94f4a7478cdf604c"
   license "MIT"
   head "https://github.com/Whatfck/hot-clipboard.git", branch: "develop"
 
