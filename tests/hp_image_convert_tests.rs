@@ -3,7 +3,7 @@ use std::process::Command;
 mod common;
 use common::{create_test_png, lock_clipboard};
 
-use hot_clipboard::copy_bitmap_image;
+use hot_clipboard::{copy_bitmap_image, copy_files};
 
 #[test]
 fn hp_image_rename_infers_png_extension() {
@@ -50,6 +50,28 @@ fn hp_image_convert_png_to_jpg() {
     assert!(bytes.len() >= 2);
     assert_eq!(bytes[0], 0xFF);
     assert_eq!(bytes[1], 0xD8);
+}
+
+#[test]
+fn hp_finder_file_convert_png_to_jpg() {
+    let _guard = lock_clipboard();
+
+    let tmp = tempfile::tempdir().unwrap();
+    let img = create_test_png(&tmp.path().join("source.png"));
+    copy_files(&[img.to_string_lossy().to_string()]).expect("copy_files should succeed");
+
+    let hp_exe = env!("CARGO_BIN_EXE_hp");
+    let status = Command::new(hp_exe)
+        .current_dir(&tmp)
+        .args(["converted.jpg", "--force"])
+        .status()
+        .unwrap();
+
+    assert!(status.success());
+    let bytes = std::fs::read(tmp.path().join("converted.jpg")).unwrap();
+    let decoded = image::load_from_memory_with_format(&bytes, image::ImageFormat::Jpeg)
+        .expect("Finder image output should be valid JPEG");
+    assert_eq!((decoded.width(), decoded.height()), (2, 2));
 }
 
 #[test]

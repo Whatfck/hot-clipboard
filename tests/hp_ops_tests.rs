@@ -1,7 +1,8 @@
 use std::path::Path;
 
 use hot_clipboard::hp_ops::{
-    copy_file, decode_clipboard_image, default_clip_ts_png, encode_image, ensure_dir,
+    batch_extension_from_pattern, copy_file, decode_clipboard_image, default_clip_ts_png,
+    destination_for_multiple_files, destination_for_single_file, encode_image, ensure_dir,
     file_destination_for_single, same_file,
 };
 
@@ -127,6 +128,69 @@ fn file_destination_for_single_joins_existing_dir_unless_rename() {
 }
 
 #[test]
+fn batch_extension_requires_alphanumeric_extension() {
+    assert_eq!(batch_extension_from_pattern("*.jpg"), Some("jpg"));
+    assert_eq!(batch_extension_from_pattern("*.JPEG"), Some("JPEG"));
+    assert_eq!(batch_extension_from_pattern("*."), None);
+    assert_eq!(batch_extension_from_pattern("*..jpg"), None);
+    assert_eq!(batch_extension_from_pattern("*.jp-g"), None);
+}
+
+#[test]
+fn destination_for_multiple_files_requires_directory() {
+    let tmp = tempfile::tempdir().unwrap();
+    let destination = tmp.path().join("out");
+    std::fs::create_dir(&destination).unwrap();
+
+    assert_eq!(
+        destination_for_multiple_files(Some(destination.to_str().unwrap()), None, false, 2)
+            .unwrap(),
+        destination
+    );
+    assert_eq!(
+        destination_for_multiple_files(None, Some("explicit"), false, 2).unwrap(),
+        Path::new("explicit")
+    );
+    assert!(destination_for_multiple_files(Some("file"), None, false, 2)
+        .unwrap_err()
+        .contains("Specify a directory"));
+}
+
+#[test]
+fn destination_for_single_file_resolves_dir_rename_and_default() {
+    let tmp = tempfile::tempdir().unwrap();
+    let source = tmp.path().join("source.txt");
+    std::fs::write(&source, b"payload").unwrap();
+    let destination_dir = tmp.path().join("out");
+    std::fs::create_dir(&destination_dir).unwrap();
+
+    assert_eq!(
+        destination_for_single_file(
+            &source,
+            Some("renamed"),
+            Some(destination_dir.to_str().unwrap()),
+            true
+        )
+        .unwrap(),
+        destination_dir.join("renamed.txt")
+    );
+    assert_eq!(
+        destination_for_single_file(
+            &source,
+            None,
+            Some(destination_dir.to_str().unwrap()),
+            false
+        )
+        .unwrap(),
+        destination_dir.join("source.txt")
+    );
+    assert_eq!(
+        destination_for_single_file(&source, None, None, false).unwrap(),
+        Path::new(".").join("source.txt")
+    );
+}
+
+#[test]
 fn default_clip_ts_png_matches_spec_pattern() {
     let name = default_clip_ts_png();
     assert!(name.starts_with("clip_"));
@@ -150,7 +214,7 @@ fn decode_clipboard_image_reads_png_bytes() {
     img.save_with_format(&path, image::ImageFormat::Png)
         .unwrap();
     let bytes = std::fs::read(&path).unwrap();
-    let decoded = decode_clipboard_image(&bytes);
+    let decoded = decode_clipboard_image(&bytes).unwrap();
     assert_eq!(decoded.width(), 2);
     assert_eq!(decoded.height(), 2);
 }
@@ -162,7 +226,7 @@ fn encode_image_writes_png_signature() {
         2,
         image::Rgb([10u8, 20, 30]),
     ));
-    let bytes = encode_image(img, "png");
+    let bytes = encode_image(img, "png").unwrap();
     assert_eq!(&bytes[0..4], &[0x89, 0x50, 0x4E, 0x47]);
 }
 
@@ -173,6 +237,6 @@ fn encode_image_writes_jpeg_signature() {
         2,
         image::Rgb([10u8, 20, 30]),
     ));
-    let bytes = encode_image(img, "jpg");
+    let bytes = encode_image(img, "jpg").unwrap();
     assert_eq!(&bytes[0..2], &[0xFF, 0xD8]);
 }

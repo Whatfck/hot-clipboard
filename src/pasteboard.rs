@@ -1,4 +1,5 @@
-use objc2::runtime::AnyObject;
+use objc2::rc::Retained;
+use objc2::runtime::{AnyClass, AnyObject, ProtocolObject};
 use objc2::ClassType;
 use objc2_app_kit::NSPasteboard;
 use objc2_foundation::{NSArray, NSString, NSURL};
@@ -41,7 +42,6 @@ pub fn copy_text(text: &str) -> Result<(), String> {
 pub fn copy_files(paths: &[String]) -> Result<(), String> {
     unsafe {
         let pasteboard = NSPasteboard::generalPasteboard();
-        pasteboard.clearContents();
 
         let mut file_urls = Vec::new();
         let mut filenames = Vec::new();
@@ -67,20 +67,24 @@ pub fn copy_files(paths: &[String]) -> Result<(), String> {
 
             let ns_path = NSString::from_str(path_string);
             let file_url = NSURL::fileURLWithPath(&ns_path);
-            let file_url_string = file_url.absoluteString().unwrap_or_default();
-
-            file_urls.push(file_url_string);
+            file_urls.push(file_url);
             filenames.push(path_string.to_string());
         }
 
-        let file_url_array = NSArray::from_vec(file_urls);
-        let public_url_type = NSString::from_str("public.file-url");
-        let public_url_written = pasteboard
-            .setPropertyList_forType((*file_url_array).as_super() as &AnyObject, &public_url_type);
+        pasteboard.clearContents();
+
+        let file_url_objects = file_urls
+            .into_iter()
+            .map(ProtocolObject::from_retained)
+            .collect::<Vec<_>>();
+        let file_url_array = NSArray::from_vec(file_url_objects);
+        let public_url_written = pasteboard.writeObjects(&file_url_array);
 
         let path_strings: Vec<_> = filenames.iter().map(|s| NSString::from_str(s)).collect();
         let paths_array = NSArray::from_vec(path_strings);
         let type_string = NSString::from_str("NSFilenamesPboardType");
+        // `paths_array` is NSArray<NSString>, which is the property-list shape
+        // required by the legacy NSFilenamesPboardType contract.
         let legacy_written = pasteboard
             .setPropertyList_forType((*paths_array).as_super() as &AnyObject, &type_string);
 
@@ -99,6 +103,10 @@ pub fn get_text() -> Result<Option<String>, String> {
 
         if let Some(ns_string) = pasteboard.stringForType(objc2_app_kit::NSPasteboardTypeString) {
             Ok(Some(ns_string.to_string()))
+        } else if let Some(ns_string) =
+            pasteboard.stringForType(&NSString::from_str("public.utf8-plain-text"))
+        {
+            Ok(Some(ns_string.to_string()))
         } else {
             Ok(None)
         }
@@ -109,6 +117,29 @@ pub fn get_text() -> Result<Option<String>, String> {
 pub fn get_file_urls() -> Result<Option<Vec<String>>, String> {
     unsafe {
         let pasteboard = NSPasteboard::generalPasteboard();
+
+        let url_class = {
+            let class: *const AnyClass = NSURL::class();
+            Retained::retain(class as *mut AnyObject)
+                .ok_or_else(|| "Failed to access NSURL class".to_string())?
+        };
+        let class_array = NSArray::from_vec(vec![url_class]);
+        if let Some(objects) = pasteboard.readObjectsForClasses_options(&class_array, None) {
+            let mut paths = Vec::new();
+            for index in 0..objects.len() {
+                let object = objects.objectAtIndex(index);
+                // readObjectsForClasses_options was restricted to NSURL above,
+                // so each returned object is safe to cast to NSURL here.
+                let url: Retained<NSURL> = Retained::cast(object);
+                if let Some(path) = url.path() {
+                    paths.push(path.to_string());
+                }
+            }
+            if !paths.is_empty() {
+                return Ok(Some(paths));
+            }
+        }
+
         let candidate_types = [
             NSString::from_str("NSFilenamesPboardType"),
             NSString::from_str("public.file-url"),
@@ -128,7 +159,18 @@ pub fn get_file_urls() -> Result<Option<Vec<String>>, String> {
 
                     for i in 0..count {
                         let ns_string = array.objectAtIndex(i);
-                        paths.push(ns_string.to_string());
+                        let value = ns_string.to_string();
+                        if type_name.to_string() == "public.file-url"
+                            || type_name.to_string() == "public.url"
+                        {
+                            if let Some(url) = NSURL::URLWithString(&ns_string) {
+                                if let Some(path) = url.path() {
+                                    paths.push(path.to_string());
+                                }
+                            }
+                        } else {
+                            paths.push(value);
+                        }
                     }
 
                     if !paths.is_empty() {
@@ -188,10 +230,10 @@ pub fn inspect_clipboard() -> Result<crate::ClipboardKind, String> {
 }
 
 pub fn inspect_clipboard_summary() -> Result<crate::ClipboardSummary, String> {
-    let types = get_clipboard_types().ok().flatten().unwrap_or_default();
-    let file_paths = get_file_urls().ok().flatten().unwrap_or_default();
-    let text = get_text().ok().flatten();
-    let image = get_image_bytes().ok().flatten();
+    let types = get_clipboard_types()?.unwrap_or_default();
+    let file_paths = get_file_urls()?.unwrap_or_default();
+    let text = get_text()?;
+    let image = get_image_bytes()?;
 
     let kind = if !file_paths.is_empty() {
         crate::ClipboardKind::Files
@@ -238,51 +280,50 @@ pub fn inspect_clipboard_summary() -> Result<crate::ClipboardSummary, String> {
 
 /// Approximate byte size of the current clipboard payload.
 pub fn get_clipboard_size() -> Result<Option<usize>, String> {
-    let file_urls = get_file_urls().ok().flatten();
-    let text = get_text().ok().flatten();
-    let image = get_image_bytes().ok().flatten();
+    let file_urls = get_file_urls()?;
+    let text = get_text()?;
+    let image = get_image_bytes()?;
 
     match () {
         _ if file_urls.as_ref().is_some_and(|files| !files.is_empty()) => {
             let total: usize = file_urls
-                .unwrap()
-                .iter()
+                .as_ref()
+                .into_iter()
+                .flatten()
                 .filter_map(|p| std::fs::metadata(p).ok())
                 .map(|m| m.len() as usize)
                 .sum();
             Ok(Some(total))
         }
-        _ if text.is_some() => Ok(Some(text.unwrap().len())),
-        _ if image.is_some() => Ok(Some(image.unwrap().0.len())),
+        _ if let Some(text) = text.as_ref() => Ok(Some(text.len())),
+        _ if let Some((data, _)) = image.as_ref() => Ok(Some(data.len())),
         _ => Ok(None),
     }
 }
 
 /// Copy image file as bitmap to clipboard.
-/// For now this is implemented by reading the file bytes and writing them as TIFF data.
 pub fn copy_bitmap_image(path: &str) -> Result<(), String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("Failed to read image: {}", e))?;
-
-    // Best-effort: choose a clipboard type based on file extension.
-    // - .png   -> NSPasteboardTypePNG
-    // - others -> NSPasteboardTypeTIFF (fallback)
+    let source_bytes = std::fs::read(path).map_err(|e| format!("Failed to read image: {}", e))?;
     let ext = Path::new(path)
         .extension()
         .and_then(|s| s.to_str())
         .map(|s| s.to_ascii_lowercase());
-
     unsafe {
         use objc2_foundation::NSData;
+
+        let (bytes, type_to_set) = match ext.as_deref() {
+            Some("png") => (source_bytes, objc2_app_kit::NSPasteboardTypePNG),
+            _ => {
+                let image = crate::image_ops::decode_image(&source_bytes)?;
+                let bytes = crate::image_ops::encode_image(image, "tiff")?;
+                (bytes, objc2_app_kit::NSPasteboardTypeTIFF)
+            }
+        };
 
         let pasteboard = NSPasteboard::generalPasteboard();
         pasteboard.clearContents();
 
         let data = NSData::with_bytes(&bytes);
-
-        let type_to_set = match ext.as_deref() {
-            Some("png") => objc2_app_kit::NSPasteboardTypePNG,
-            _ => objc2_app_kit::NSPasteboardTypeTIFF,
-        };
 
         let ok = pasteboard.setData_forType(Some(&data), type_to_set);
 
@@ -294,7 +335,10 @@ pub fn copy_bitmap_image(path: &str) -> Result<(), String> {
     }
 }
 
-/// Write raw bytes under an arbitrary pasteboard type (tests / unknown binary).
+/// Write raw bytes under an arbitrary pasteboard type.
+///
+/// This is primarily useful for integration tests and diagnostics that need to
+/// model an unknown pasteboard payload.
 pub fn copy_raw_bytes(bytes: &[u8], pasteboard_type: &str) -> Result<(), String> {
     unsafe {
         use objc2_foundation::NSData;

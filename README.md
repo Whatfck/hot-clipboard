@@ -1,11 +1,16 @@
 # Hot CLIpboard
 
+## ⚠️ **DEVELOPMENT** ⚠️
+
 **hot-clipboard** is a small Rust CLI tool that makes copy/paste between your terminal and macOS apps feel fast and ergonomic.
 
 - **`hc` (Hot Copy):** copy files / text / images to the macOS clipboard
 - **`hp` (Hot Paste):** paste clipboard content to files or stdout
 
 Built on **`NSPasteboard`**.
+
+Image conversion currently supports PNG, JPEG, and TIFF. WebP, GIF, and BMP are
+not conversion targets.
 
 ---
 
@@ -169,6 +174,14 @@ cargo test --all
 Tests interact with the macOS clipboard, so:
 - they may require macOS privacy/access permissions
 - clipboard access is protected by a test lock to reduce cross-test races
+
+## Platform notes
+
+`hot-clipboard` requires macOS because it uses `NSPasteboard`. Terminal and
+the calling application may need permission to access the clipboard. The tool
+supports PNG, JPEG, and TIFF for image conversion; WebP, GIF, and BMP are not
+conversion targets. File URLs, UTF-8 text, and clipboard image data are read
+through the standard macOS pasteboard types.
 
 ---
 

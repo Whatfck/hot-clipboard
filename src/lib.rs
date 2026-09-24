@@ -1,9 +1,12 @@
+//! macOS clipboard integration and file/image operations for `hc` and `hp`.
+
 pub mod pasteboard;
 
 pub mod hp_ops;
 pub mod image_ops;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// High-level classification of the current pasteboard contents.
 pub enum ClipboardKind {
     Files,
     Image,
@@ -13,6 +16,7 @@ pub enum ClipboardKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Metadata summary returned by pasteboard inspection.
 pub struct ClipboardSummary {
     pub kind: ClipboardKind,
     pub element_count: usize,

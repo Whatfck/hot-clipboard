@@ -11,17 +11,17 @@ fn abs_path(p: &Path) -> String {
 }
 
 #[test]
-fn hp_batch_changes_extension() {
+fn hp_batch_changes_text_extension_and_preserves_content() {
     let _guard = lock_clipboard();
 
     let tmp = tempfile::tempdir().unwrap();
     let src_dir = tmp.path().join("src");
     std::fs::create_dir_all(&src_dir).unwrap();
 
-    let a = src_dir.join("a.png");
+    let a = src_dir.join("a.md");
     std::fs::write(&a, b"aaa").unwrap();
 
-    let b = src_dir.join("b.txt");
+    let b = src_dir.join("b.md");
     std::fs::write(&b, b"bbb").unwrap();
 
     copy_files(&[abs_path(&a), abs_path(&b)]).expect("copy_files should succeed");
@@ -29,14 +29,14 @@ fn hp_batch_changes_extension() {
     let hp_exe = env!("CARGO_BIN_EXE_hp");
     let status = Command::new(hp_exe)
         .current_dir(&tmp)
-        .args(["*.jpg"])
+        .args(["*.txt"])
         .arg("--force")
         .status()
         .unwrap();
 
     assert!(status.success());
-    assert!(tmp.path().join("a.jpg").exists());
-    assert!(tmp.path().join("b.jpg").exists());
+    assert_eq!(std::fs::read(tmp.path().join("a.txt")).unwrap(), b"aaa");
+    assert_eq!(std::fs::read(tmp.path().join("b.txt")).unwrap(), b"bbb");
 }
 
 #[test]
@@ -59,7 +59,7 @@ fn hp_batch_converts_real_png_to_jpeg() {
     let out = tmp.path().join("photo.jpg");
     assert!(out.exists());
     let bytes = std::fs::read(&out).unwrap();
-    assert!(bytes.len() >= 2);
-    assert_eq!(bytes[0], 0xFF);
-    assert_eq!(bytes[1], 0xD8);
+    let decoded = image::load_from_memory_with_format(&bytes, image::ImageFormat::Jpeg)
+        .expect("batch output should be valid JPEG");
+    assert_eq!((decoded.width(), decoded.height()), (2, 2));
 }

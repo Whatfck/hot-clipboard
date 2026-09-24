@@ -27,6 +27,21 @@ fn hp_text_writes_file_when_output_given() {
 }
 
 #[test]
+fn hp_text_without_output_writes_only_to_stdout() {
+    let _guard = lock_clipboard();
+
+    copy_text("hello stdout").expect("copy_text should work");
+
+    let tmp = tempfile::tempdir().unwrap();
+    let hp_exe = env!("CARGO_BIN_EXE_hp");
+    let output = Command::new(hp_exe).current_dir(&tmp).output().unwrap();
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"hello stdout");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
 fn hp_text_refuses_overwrite_without_force() {
     let _guard = lock_clipboard();
 

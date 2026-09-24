@@ -7,7 +7,9 @@ use common::lock_clipboard;
 fn hc_cli_nonexistent_file_fails_with_expected_message() {
     let _guard = lock_clipboard();
 
-    let hc_exe = env!("CARGO_BIN_EXE_hc");
+    let hc_exe = std::path::Path::new(env!("CARGO_BIN_EXE_hc"))
+        .canonicalize()
+        .unwrap();
     let tmp = tempfile::tempdir().unwrap();
 
     let bogus = tmp.path().join("does_not_exist.txt");

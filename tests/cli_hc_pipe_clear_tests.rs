@@ -76,3 +76,35 @@ fn hc_cli_clear_clears_text() {
     assert!(output.status.success());
     assert_eq!(get_text().unwrap(), None);
 }
+
+#[test]
+fn hc_cli_invalid_utf8_fails_without_panic() {
+    let _guard = lock_clipboard();
+
+    let tmp = tempfile::tempdir().unwrap();
+    let hc_exe = env!("CARGO_BIN_EXE_hc");
+    let mut child = Command::new(hc_exe)
+        .current_dir(&tmp)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    use std::io::Write;
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"valid\xFF")
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+
+    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("stdin is not valid UTF-8"),
+        "stderr: {stderr}"
+    );
+    assert!(!stderr.contains("panicked"), "stderr: {stderr}");
+}

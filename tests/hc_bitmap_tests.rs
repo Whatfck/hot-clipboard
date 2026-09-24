@@ -1,5 +1,6 @@
 mod common;
 use common::{create_test_jpg, lock_clipboard};
+use image::ImageFormat;
 
 use hot_clipboard::{copy_bitmap_image, get_clipboard_types, get_image_bytes};
 
@@ -29,4 +30,7 @@ fn hc_bitmap_sets_tiff_type_for_jpg() {
 
     assert!(!bytes.is_empty());
     assert!(kind.to_lowercase().contains("tiff"));
+    let decoded = image::load_from_memory_with_format(&bytes, ImageFormat::Tiff)
+        .expect("bitmap bytes announced as TIFF must be valid TIFF data");
+    assert_eq!((decoded.width(), decoded.height()), (2, 2));
 }

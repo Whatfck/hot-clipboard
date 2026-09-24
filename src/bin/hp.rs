@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use hot_clipboard::{get_clipboard_types, get_file_urls, get_image_bytes, get_text};
 
 use hot_clipboard::hp_ops::{
-    copy_file, decode_clipboard_image, default_clip_ts_png, encode_image, ensure_dir,
-    file_destination_for_single,
+    batch_extension_from_pattern, copy_file, decode_clipboard_image, default_clip_ts_png,
+    destination_for_multiple_files, destination_for_single_file, encode_image, ensure_dir,
 };
 
 #[derive(Parser)]
@@ -38,14 +38,9 @@ fn main() {
     let args = Cli::parse();
 
     if args.info {
-        let summary = hot_clipboard::inspect_clipboard_summary().unwrap_or_else(|_| {
-            hot_clipboard::ClipboardSummary {
-                kind: hot_clipboard::ClipboardKind::Empty,
-                element_count: 0,
-                approximate_bytes: 0,
-                types: Vec::new(),
-                file_paths: Vec::new(),
-            }
+        let summary = hot_clipboard::inspect_clipboard_summary().unwrap_or_else(|error| {
+            eprintln!("Error: {}", error);
+            std::process::exit(1);
         });
 
         println!("Clipboard kind: {:?}", summary.kind);
@@ -73,85 +68,68 @@ fn main() {
 
         // Batch extension rename: hp -d <dir> "*.ext" [--force]
         if let Some(pattern) = output_str {
-            if let Some(ext) = pattern.strip_prefix("*.") {
-                if !ext.is_empty() {
-                    let dest_dir = explicit_dir
-                        .map(Path::new)
-                        .unwrap_or_else(|| Path::new("."));
-                    if let Err(e) = ensure_dir(dest_dir) {
-                        eprintln!("{}", e);
+            if let Some(ext) = batch_extension_from_pattern(pattern) {
+                let dest_dir = explicit_dir
+                    .map(Path::new)
+                    .unwrap_or_else(|| Path::new("."));
+                if let Err(e) = ensure_dir(dest_dir) {
+                    eprintln!("{}", e);
+                    std::process::exit(1);
+                }
+
+                use hot_clipboard::image_ops::convert_or_copy_file;
+
+                for src in &src_paths {
+                    let filename = src.file_name().and_then(|s| s.to_str()).unwrap_or("file");
+                    let stem = src
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_else(|| filename.to_string());
+
+                    let dest = dest_dir.join(format!("{}.{}", stem, ext));
+
+                    if dest.exists() && !args.force {
+                        eprintln!(
+                            "Error: File '{}' already exists. Use --force to overwrite.",
+                            dest.display()
+                        );
                         std::process::exit(1);
                     }
 
-                    use hot_clipboard::image_ops::convert_or_copy_file;
-
-                    for src in &src_paths {
-                        let filename = src.file_name().and_then(|s| s.to_str()).unwrap_or("file");
-                        let stem = src
-                            .file_stem()
-                            .map(|s| s.to_string_lossy().to_string())
-                            .unwrap_or_else(|| filename.to_string());
-
-                        let dest = dest_dir.join(format!("{}.{}", stem, ext));
-
-                        if dest.exists() && !args.force {
-                            eprintln!(
-                                "Error: File '{}' already exists. Use --force to overwrite.",
-                                dest.display()
-                            );
+                    let bytes = match convert_or_copy_file(src, &dest, ext) {
+                        Ok(b) => b,
+                        Err(e) => {
+                            eprintln!("{}", e);
                             std::process::exit(1);
                         }
+                    };
 
-                        let bytes = match convert_or_copy_file(src, &dest, ext) {
-                            Ok(b) => b,
-                            Err(e) => {
-                                eprintln!("{}", e);
-                                std::process::exit(1);
-                            }
-                        };
-
-                        if let Err(e) = fs::write(&dest, &bytes) {
-                            eprintln!("Error: Failed to write file '{}': {}", dest.display(), e);
-                            std::process::exit(1);
-                        }
+                    if let Err(e) = fs::write(&dest, &bytes) {
+                        eprintln!("Error: Failed to write file '{}': {}", dest.display(), e);
+                        std::process::exit(1);
                     }
-                    return;
                 }
+                return;
             }
         }
 
         // Destination directory for multi-file cases
         if n >= 2 {
-            let dest_dir: &Path = if let Some(explicit) = explicit_dir {
-                Path::new(explicit)
-            } else if let Some(out) = output_str {
-                // SPEC A.3: if the positional argument exists as a directory, paste into it.
-                // But `-r/--rename` forces treating it as a filename (even if it's a directory),
-                // so we still require --dir for multi-file when rename is set.
-                let p = Path::new(out);
-                if p.is_dir() && !args.rename {
-                    p
-                } else {
-                    eprintln!(
-                        "Error: Clipboard contains {} files. Specify a directory: hp -d <dir>",
-                        n
-                    );
+            let dest_dir = destination_for_multiple_files(output_str, explicit_dir, args.rename, n)
+                .unwrap_or_else(|error| {
+                    eprintln!("{}", error);
                     std::process::exit(1);
-                }
-            } else {
-                eprintln!(
-                    "Error: Clipboard contains {} files. Specify a directory: hp -d <dir>",
-                    n
-                );
-                std::process::exit(1);
-            };
+                });
 
-            if let Err(e) = ensure_dir(dest_dir) {
+            if let Err(e) = ensure_dir(&dest_dir) {
                 eprintln!("{}", e);
                 std::process::exit(1);
             }
             for src in &src_paths {
-                let filename = src.file_name().unwrap();
+                let filename = src.file_name().unwrap_or_else(|| {
+                    eprintln!("Error: Source path has no filename: '{}'.", src.display());
+                    std::process::exit(1);
+                });
                 if let Err(e) = copy_file(src, &dest_dir.join(filename), args.force) {
                     eprintln!("{}", e);
                     std::process::exit(1);
@@ -160,73 +138,22 @@ fn main() {
             return;
         }
 
-        // If multiple files and no directory provided, the code above exits.
-
         // Single file case
         let src = &src_paths[0];
-
-        // If --dir is provided, copy into that directory (ignore positional output unless --rename is set).
-        if let Some(d) = explicit_dir {
-            let dest_dir = Path::new(d);
-            if let Err(e) = ensure_dir(dest_dir) {
-                eprintln!("{}", e);
+        let dest = destination_for_single_file(src, output_str, explicit_dir, args.rename)
+            .unwrap_or_else(|error| {
+                eprintln!("Error: {}", error);
+                std::process::exit(1);
+            });
+        if let Some(explicit_dir) = explicit_dir {
+            if let Err(error) = ensure_dir(Path::new(explicit_dir)) {
+                eprintln!("{}", error);
                 std::process::exit(1);
             }
-
-            if args.rename {
-                if let Some(out) = output_str {
-                    let rel_dest = match file_destination_for_single(src, out, true) {
-                        Ok(p) => p,
-                        Err(e) => {
-                            eprintln!("Error: {}", e);
-                            std::process::exit(1);
-                        }
-                    };
-                    let dest_name = rel_dest
-                        .file_name()
-                        .ok_or_else(|| "Output destination has no filename".to_string())
-                        .unwrap();
-                    let dest = dest_dir.join(dest_name);
-                    if let Err(e) = copy_file(src, &dest, args.force) {
-                        eprintln!("{}", e);
-                        std::process::exit(1);
-                    }
-                    return;
-                }
-            }
-
-            // Default: preserve original filename inside --dir.
-            let filename = src.file_name().unwrap();
-            if let Err(e) = copy_file(src, &dest_dir.join(filename), args.force) {
-                eprintln!("{}", e);
-                std::process::exit(1);
-            }
-            return;
         }
-
-        // No --dir provided
-        match output_str {
-            None => {
-                let filename = src.file_name().unwrap();
-                let dest = Path::new(".").join(filename);
-                if let Err(e) = copy_file(src, &dest, args.force) {
-                    eprintln!("{}", e);
-                    std::process::exit(1);
-                }
-            }
-            Some(out) => {
-                let dest = match file_destination_for_single(src, out, args.rename) {
-                    Ok(p) => p,
-                    Err(e) => {
-                        eprintln!("Error: {}", e);
-                        std::process::exit(1);
-                    }
-                };
-                if let Err(e) = copy_file(src, &dest, args.force) {
-                    eprintln!("{}", e);
-                    std::process::exit(1);
-                }
-            }
+        if let Err(error) = copy_file(src, &dest, args.force) {
+            eprintln!("{}", error);
+            std::process::exit(1);
         }
 
         return;
@@ -234,7 +161,10 @@ fn main() {
 
     // Priority 2: Clipboard image (raw TIFF/PNG)
     if let Ok(Some((bytes, _kind))) = get_image_bytes() {
-        let img = decode_clipboard_image(&bytes);
+        let img = decode_clipboard_image(&bytes).unwrap_or_else(|error| {
+            eprintln!("Error: {}", error);
+            std::process::exit(1);
+        });
         let dest_dir = args
             .dir
             .as_deref()
@@ -273,7 +203,10 @@ fn main() {
             std::process::exit(1);
         }
 
-        let out_bytes = encode_image(img, &ext);
+        let out_bytes = encode_image(img, &ext).unwrap_or_else(|error| {
+            eprintln!("Error: {}", error);
+            std::process::exit(1);
+        });
         if let Err(e) = fs::write(&target_path, &out_bytes) {
             eprintln!(
                 "Error: Failed to write file '{}': {}",
@@ -307,7 +240,10 @@ fn main() {
                 println!("✓ Pasted {} bytes to {}", text.len(), output_path);
             } else {
                 print!("{}", text);
-                io::stdout().flush().unwrap();
+                if let Err(error) = io::stdout().flush() {
+                    eprintln!("Error: Failed to flush stdout: {}", error);
+                    std::process::exit(1);
+                }
             }
         }
         _ => {

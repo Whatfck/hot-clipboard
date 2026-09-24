@@ -33,7 +33,7 @@ pub fn decode_image(bytes: &[u8]) -> Result<image::DynamicImage, String> {
 pub fn looks_like_image_ext(ext: &str) -> bool {
     matches!(
         ext.to_ascii_lowercase().as_str(),
-        "png" | "jpg" | "jpeg" | "tiff" | "tif" | "webp" | "gif" | "bmp"
+        "png" | "jpg" | "jpeg" | "tiff" | "tif"
     )
 }
 
@@ -54,10 +54,12 @@ pub fn convert_or_copy_file(src: &Path, _dest: &Path, dest_ext: &str) -> Result<
             std::fs::read(src).map_err(|e| format!("Failed to read '{}': {}", src.display(), e))?;
         match decode_image(&bytes) {
             Ok(img) => encode_image(img, &dest_ext_l),
-            Err(_) => {
-                // Not a real image payload: fall back to a byte copy (rename only).
-                Ok(bytes)
-            }
+            Err(error) => Err(format!(
+                "Failed to convert '{}' to .{}: {}",
+                src.display(),
+                dest_ext_l,
+                error
+            )),
         }
     } else {
         std::fs::read(src).map_err(|e| format!("Failed to read '{}': {}", src.display(), e))

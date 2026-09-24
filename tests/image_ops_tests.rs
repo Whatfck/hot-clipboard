@@ -18,18 +18,10 @@ fn looks_like_image_ext_returns_true_for_tiff() {
 }
 
 #[test]
-fn looks_like_image_ext_returns_true_for_webp() {
-    assert!(image_ops::looks_like_image_ext("webp"));
-}
-
-#[test]
-fn looks_like_image_ext_returns_true_for_gif() {
-    assert!(image_ops::looks_like_image_ext("gif"));
-}
-
-#[test]
-fn looks_like_image_ext_returns_true_for_bmp() {
-    assert!(image_ops::looks_like_image_ext("bmp"));
+fn looks_like_image_ext_rejects_unsupported_conversion_formats() {
+    assert!(!image_ops::looks_like_image_ext("webp"));
+    assert!(!image_ops::looks_like_image_ext("gif"));
+    assert!(!image_ops::looks_like_image_ext("bmp"));
 }
 
 #[test]
@@ -215,6 +207,18 @@ fn convert_or_copy_file_copies_when_both_are_image_but_same_ext() {
 
     let bytes = result.unwrap();
     assert_eq!(bytes, original_content);
+}
+
+#[test]
+fn convert_or_copy_file_rejects_invalid_image_conversion() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("input.png");
+    let dest = tmp.path().join("output.jpg");
+    std::fs::write(&src, b"not an image").unwrap();
+
+    let result = image_ops::convert_or_copy_file(&src, &dest, "jpg");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("Failed to convert"));
 }
 
 #[test]

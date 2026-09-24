@@ -57,11 +57,19 @@ fn main() {
     // No files: detect stdin (pipe)
     let stdin = io::stdin();
     if !stdin.is_terminal() {
-        let mut buffer = String::new();
+        let mut bytes = Vec::new();
         stdin
             .lock()
-            .read_to_string(&mut buffer)
-            .expect("Failed to read stdin");
+            .read_to_end(&mut bytes)
+            .unwrap_or_else(|error| {
+                eprintln!("Error: Failed to read stdin: {}", error);
+                std::process::exit(1);
+            });
+
+        let buffer = String::from_utf8(bytes).unwrap_or_else(|_| {
+            eprintln!("Error: stdin is not valid UTF-8.");
+            std::process::exit(1);
+        });
 
         match copy_text(&buffer) {
             Ok(_) => println!("✓ Copied {} bytes to clipboard", buffer.len()),

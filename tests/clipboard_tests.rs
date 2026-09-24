@@ -1,4 +1,10 @@
-use hot_clipboard::{copy_files, copy_text, get_file_urls, get_text};
+use hot_clipboard::{
+    clear_clipboard, copy_files, copy_raw_bytes, copy_text, get_clipboard_size, get_file_urls,
+    get_text, inspect_clipboard, ClipboardKind,
+};
+use objc2::runtime::ProtocolObject;
+use objc2_app_kit::NSPasteboard;
+use objc2_foundation::{NSArray, NSString, NSURL};
 
 mod common;
 use common::lock_clipboard;
@@ -56,6 +62,43 @@ fn get_text_returns_none_when_empty() {
 }
 
 #[test]
+fn get_text_reads_utf8_type_without_legacy_type() {
+    let _guard = lock_clipboard();
+
+    unsafe {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        pasteboard.clearContents();
+        let value = NSString::from_str("utf8 only");
+        let utf8_type = NSString::from_str("public.utf8-plain-text");
+        assert!(pasteboard.setString_forType(&value, &utf8_type));
+    }
+
+    assert_eq!(get_text().unwrap(), Some("utf8 only".to_string()));
+}
+
+#[test]
+fn get_file_urls_decodes_public_file_url_values() {
+    let _guard = lock_clipboard();
+
+    let tmp = tempfile::tempdir().unwrap();
+    let file = tmp.path().join("file with spaces.txt");
+    std::fs::write(&file, b"payload").unwrap();
+    let file_url = unsafe { NSURL::fileURLWithPath(&NSString::from_str(&file.to_string_lossy())) };
+
+    unsafe {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        pasteboard.clearContents();
+        let values = NSArray::from_vec(vec![ProtocolObject::from_retained(file_url)]);
+        assert!(pasteboard.writeObjects(&values));
+    }
+
+    assert_eq!(
+        get_file_urls().unwrap(),
+        Some(vec![file.to_string_lossy().to_string()])
+    );
+}
+
+#[test]
 fn copy_text_overwrites_previous_clipboard() {
     let _guard = lock_clipboard();
 
@@ -106,6 +149,25 @@ fn copy_files_rejects_missing_file() {
 }
 
 #[test]
+fn copy_files_keeps_previous_clipboard_when_validation_fails() {
+    let _guard = lock_clipboard();
+
+    copy_text("keep this").expect("copy_text should work");
+    let tmp = tempfile::tempdir().unwrap();
+    let valid = tmp.path().join("valid.txt");
+    std::fs::write(&valid, b"valid").unwrap();
+    let missing = tmp.path().join("missing.txt");
+
+    let result = copy_files(&[
+        valid.to_string_lossy().to_string(),
+        missing.to_string_lossy().to_string(),
+    ]);
+
+    assert!(result.is_err());
+    assert_eq!(get_text().unwrap(), Some("keep this".to_string()));
+}
+
+#[test]
 fn copy_text_handles_empty_string() {
     let _guard = lock_clipboard();
 
@@ -139,6 +201,30 @@ fn get_file_urls_returns_canonical_paths() {
 }
 
 #[test]
+fn clipboard_size_and_kind_cover_text_files_binary_and_empty() {
+    let _guard = lock_clipboard();
+
+    copy_text("hello").unwrap();
+    assert_eq!(get_clipboard_size().unwrap(), Some(5));
+    assert_eq!(inspect_clipboard().unwrap(), ClipboardKind::Text);
+
+    let tmp = tempfile::tempdir().unwrap();
+    let file = tmp.path().join("size.txt");
+    std::fs::write(&file, b"1234").unwrap();
+    copy_files(&[file.to_string_lossy().to_string()]).unwrap();
+    assert_eq!(get_clipboard_size().unwrap(), Some(4));
+    assert_eq!(inspect_clipboard().unwrap(), ClipboardKind::Files);
+
+    copy_raw_bytes(b"binary", "public.data").unwrap();
+    assert_eq!(get_clipboard_size().unwrap(), None);
+    assert_eq!(inspect_clipboard().unwrap(), ClipboardKind::Binary);
+
+    clear_clipboard().unwrap();
+    assert_eq!(get_clipboard_size().unwrap(), None);
+    assert_eq!(inspect_clipboard().unwrap(), ClipboardKind::Empty);
+}
+
+#[test]
 fn copy_files_multiple_mixed_absolute_relative() {
     let _guard = lock_clipboard();
 
@@ -146,6 +232,7 @@ fn copy_files_multiple_mixed_absolute_relative() {
     let abs = tmp.path().join("abs.txt");
     std::fs::write(&abs, b"abs").unwrap();
 
+    let original_dir = std::env::current_dir().unwrap();
     std::env::set_current_dir(&tmp).unwrap();
 
     let rel = "abs.txt".to_string();
@@ -157,4 +244,6 @@ fn copy_files_multiple_mixed_absolute_relative() {
     assert!(got.is_some());
     let urls = got.unwrap();
     assert_eq!(urls.len(), 2);
+
+    std::env::set_current_dir(original_dir).unwrap();
 }
