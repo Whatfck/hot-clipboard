@@ -191,4 +191,4 @@ through the standard macOS pasteboard types.
 ---
 
 ## Author
-@Whatfck
+[**@Whatfck**](https://github.com/Whatfck)
