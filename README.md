@@ -1,6 +1,8 @@
 # Hot CLIpboard
 
-**hot-clipboard** is a small Rust CLI tool that makes copy/paste between your terminal and macOS apps feel fast and ergonomic.
+A modern, ergonomic take on `pbcopy`/`pbpaste` for macOS. `hc` copies files, text, and images; `hp` pastes, renames, and converts — all from the terminal.
+
+**hot-clipboard** makes copy/paste between your terminal and macOS apps feel fast and ergonomic.
 
 - **`hc` (Hot Copy):** copy files / text / images to the macOS clipboard
 - **`hp` (Hot Paste):** paste clipboard content to files or stdout
