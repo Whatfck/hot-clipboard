@@ -136,6 +136,7 @@ hp > output.txt
 To install `hot-clipboard`:
 
 ```bash
+brew trust Whatfck/hot-clipboard
 brew tap Whatfck/hot-clipboard
 brew install hot-clipboard
 ```
@@ -145,6 +146,8 @@ Or in one line:
 ```bash
 brew install Whatfck/hot-clipboard/hot-clipboard
 ```
+
+> `brew trust` is required once: Homebrew refuses to load formulae from third-party taps until you explicitly trust them.
 
 This installs from the [`Whatfck/homebrew-hot-clipboard`](https://github.com/Whatfck/homebrew-hot-clipboard) Tap. **Once approved in Homebrew Core**, you will be able to install with just `brew install hot-clipboard`.
 
