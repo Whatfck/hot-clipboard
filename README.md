@@ -1,7 +1,5 @@
 # Hot CLIpboard
 
-## ⚠️ **DEVELOPMENT** ⚠️
-
 **hot-clipboard** is a small Rust CLI tool that makes copy/paste between your terminal and macOS apps feel fast and ergonomic.
 
 - **`hc` (Hot Copy):** copy files / text / images to the macOS clipboard
@@ -138,15 +136,17 @@ hp > output.txt
 To install `hot-clipboard`:
 
 ```bash
-brew tap Whatfck/hot-clipboard https://github.com/Whatfck/hot-clipboard.git
+brew tap Whatfck/hot-clipboard
 brew install hot-clipboard
 ```
 
-This adds the `Whatfck/hot-clipboard` Tap. **Once approved in Homebrew Core**, you can install via:
+Or in one line:
 
 ```bash
-brew install hot-clipboard
+brew install Whatfck/hot-clipboard/hot-clipboard
 ```
+
+This installs from the [`Whatfck/homebrew-hot-clipboard`](https://github.com/Whatfck/homebrew-hot-clipboard) Tap. **Once approved in Homebrew Core**, you will be able to install with just `brew install hot-clipboard`.
 
 ### Build from source (Cargo)
 
