@@ -154,6 +154,10 @@ fn destination_for_multiple_files_requires_directory() {
     assert!(destination_for_multiple_files(Some("file"), None, false, 2)
         .unwrap_err()
         .contains("Specify a directory"));
+    assert_eq!(
+        destination_for_multiple_files(None, None, false, 2).unwrap(),
+        Path::new(".")
+    );
 }
 
 #[test]

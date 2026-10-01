@@ -174,17 +174,20 @@ pub fn destination_for_multiple_files(
         return Ok(PathBuf::from(explicit_dir));
     }
 
-    if let Some(output) = output {
-        let path = Path::new(output);
-        if path.is_dir() && !rename {
-            return Ok(path.to_path_buf());
+    match output {
+        None => Ok(PathBuf::from(".")),
+        Some(output) => {
+            let path = Path::new(output);
+            if path.is_dir() && !rename {
+                Ok(path.to_path_buf())
+            } else {
+                Err(format!(
+                    "Error: Clipboard contains {} files. Specify a directory: hp -d <dir>",
+                    count
+                ))
+            }
         }
     }
-
-    Err(format!(
-        "Error: Clipboard contains {} files. Specify a directory: hp -d <dir>",
-        count
-    ))
 }
 
 pub fn destination_for_single_file(

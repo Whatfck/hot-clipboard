@@ -61,7 +61,29 @@ fn hp_dir_copies_multiple_files_and_creates_destination() {
 }
 
 #[test]
-fn hp_multiple_files_without_destination_fails_with_guidance() {
+fn hp_multiple_files_without_destination_pastes_into_current_directory() {
+    let _guard = lock_clipboard();
+    let tmp = tempfile::tempdir().unwrap();
+    let source = tmp.path().join("source");
+    std::fs::create_dir(&source).unwrap();
+    let first = source.join("first.txt");
+    let second = source.join("second.txt");
+    std::fs::write(&first, b"first").unwrap();
+    std::fs::write(&second, b"second").unwrap();
+    copy_files(&[abs_path(&first), abs_path(&second)]).expect("copy_files should work");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_hp"))
+        .current_dir(&tmp)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert_eq!(std::fs::read(tmp.path().join("first.txt")).unwrap(), b"first");
+    assert_eq!(std::fs::read(tmp.path().join("second.txt")).unwrap(), b"second");
+}
+
+#[test]
+fn hp_multiple_files_with_non_directory_destination_fails_with_guidance() {
     let _guard = lock_clipboard();
     let tmp = tempfile::tempdir().unwrap();
     let first = tmp.path().join("first.txt");
@@ -72,6 +94,7 @@ fn hp_multiple_files_without_destination_fails_with_guidance() {
 
     let output = Command::new(env!("CARGO_BIN_EXE_hp"))
         .current_dir(&tmp)
+        .arg("not-a-directory")
         .output()
         .unwrap();
 
